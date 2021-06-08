@@ -1,12 +1,14 @@
 # skrypt minimalny do rozpoznania próbki
 import tensorflow as tf
 
-def predict(recording):
+def predict(audio_binary):
 
-    model = tf.keras.models.load_model('my_model')
-    # recording = '/content/real_recording/healthy/recording.wav'
+    interpreter = tf.lite.Interpreter(model_path='model.tflite')
+    interpreter.allocate_tensors()
 
-    audio_binary = tf.io.read_file(recording)
+    input_index = interpreter.get_input_details()[0]["index"]
+    output_index = interpreter.get_output_details()[0]["index"]
+
     audio, _ = tf.audio.decode_wav(audio_binary)
     waveform = tf.squeeze(audio, axis=-1)
     zero_padding = tf.zeros([500000] - tf.shape(waveform), dtype=tf.float32)
@@ -17,9 +19,11 @@ def predict(recording):
     spectrogram = tf.abs(spectrogram)
     spectrogram = tf.expand_dims(spectrogram, -1)
 
-    prediction = model(spectrogram)
-    prediction =tf.nn.softmax(prediction[0])
+    interpreter.set_tensor(input_index, [spectrogram])
+    interpreter.invoke()
+    prediction = interpreter.get_tensor(output_index)
+    prediction = tf.nn.softmax(prediction[0])
 
     print(prediction)
 
-    return float(prediction[0])
+    return tf.keras.backend.get_value(prediction[0]), tf.keras.backend.get_value(prediction[1])
